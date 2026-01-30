@@ -1,0 +1,24 @@
+{
+  "args": {
+    "cellsize": 10.0,
+    "dataset": "test1",
+    "gamma": 3.0,
+    "grey_subcells": true,
+    "max_drio": 80.0,
+    "s": 100,
+    "save_args": true,
+    "sigma_meters": 8.0,
+    "smooth": "step",
+    "vcol": "NUMPOINTS",
+    "xcol": "X",
+    "ycol": "Y"
+  },
+  "argv": [
+    "/home/fedro/Biologia/project/src/prepare.py",
+    "--dataset",
+    "test1",
+    "--grey-subcells",
+    "--save-args"
+  ],
+  "timestamp_utc": "2026-01-23T13:59:08.237392Z"
+}

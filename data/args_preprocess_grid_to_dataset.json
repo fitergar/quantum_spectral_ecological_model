@@ -1,0 +1,24 @@
+{
+  "args": {
+    "b_csv": "B2GL.csv",
+    "dataset": "test1",
+    "esrio_col": "Esrio",
+    "g_csv": "G2GL.csv",
+    "grid_csv": "Gridvaluesraw.csv",
+    "key_precision": 4,
+    "n_per_cell": 25,
+    "r_csv": "R2GL.csv",
+    "radius": 5.0,
+    "save_args": true,
+    "save_subcoords": false,
+    "x_offset": 0.47,
+    "y_offset": 0.25
+  },
+  "argv": [
+    "/home/fedro/Biologia/project/src/preprocess_grid_to_dataset.py",
+    "--dataset",
+    "test1",
+    "--save-args"
+  ],
+  "timestamp_utc": "2026-01-23T09:55:59.260066Z"
+}

@@ -1,0 +1,26 @@
+{
+  "args": {
+    "cuda": false,
+    "dataset": "test1",
+    "driver_h1": 400,
+    "driver_h2": 500,
+    "driver_h3": 450,
+    "driver_poly": 5,
+    "epochs": 100000,
+    "log_every": 5000,
+    "lr0_inv": 100.0,
+    "metrics_csv": "train_driver_metrics.csv",
+    "save_args": true,
+    "seed": 0,
+    "step_size": 1.0,
+    "warm_start": false
+  },
+  "argv": [
+    "/home/fedro/Biologia/project/src/train_driver.py",
+    "--dataset",
+    "test1",
+    "--no-warm-start",
+    "--save-args"
+  ],
+  "timestamp_utc": "2026-01-23T19:32:48.532001Z"
+}

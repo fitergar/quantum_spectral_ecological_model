@@ -1,0 +1,20 @@
+{
+  "args": {
+    "a": 0.075,
+    "b": 2,
+    "cuda": false,
+    "d0": 30.0,
+    "dataset": "test1",
+    "epochs": 100000,
+    "k": 0.5,
+    "lr0_inv": 100.0,
+    "mod_h1": 300,
+    "mod_h2": 400,
+    "mod_h3": 650,
+    "mod_poly": 1,
+    "save_args": true,
+    "step_size": 1.0,
+    "warm_start": false
+  },
+  "timestamp_utc": "2026-01-23T14:58:35.567570Z"
+}

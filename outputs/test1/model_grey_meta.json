@@ -1,0 +1,55 @@
+{
+  "a": 0.07,
+  "b": 5.0,
+  "d0_meters": 30.0,
+  "driver_meta": {
+    "hidden": [
+      400,
+      500,
+      450
+    ],
+    "input": "drio",
+    "model": "MLPDriver",
+    "poly_degree": 5,
+    "train_args": {
+      "cuda": false,
+      "dataset": "test1",
+      "driver_h1": 400,
+      "driver_h2": 500,
+      "driver_h3": 450,
+      "driver_poly": 5,
+      "epochs": 50000,
+      "log_every": 100,
+      "lr0_inv": 100.0,
+      "metrics_csv": "train_driver_metrics_test.csv",
+      "save_args": false,
+      "seed": 0,
+      "step_size": 1.0,
+      "warm_start": false
+    }
+  },
+  "grey_features": "Grey1..Grey25",
+  "k_per_meter": 0.5,
+  "model": "MLPModulatedGrey25Local",
+  "train_args": {
+    "a": 0.07,
+    "b": 5.0,
+    "cuda": false,
+    "d0": 30.0,
+    "dataset": "test1",
+    "epochs": 500000,
+    "k": 0.5,
+    "log_every": 1000,
+    "lr0_inv": 100.0,
+    "metrics_csv": "train_grey_metrics_test.csv",
+    "mod_h1": 300,
+    "mod_h2": 400,
+    "mod_h3": 650,
+    "mod_poly": 1,
+    "save_args": false,
+    "seed": 0,
+    "step_size": 1,
+    "warm_start": false
+  },
+  "uses_Z": true
+}

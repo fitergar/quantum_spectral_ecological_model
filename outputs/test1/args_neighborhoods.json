@@ -1,0 +1,11 @@
+{
+  "args": {
+    "dataset": "test1",
+    "drio_center": 0.0,
+    "drio_tol": 1e-09,
+    "half_size": 60.0,
+    "outfile": "VecindadesLinf.pkl",
+    "save_args": true
+  },
+  "timestamp_utc": "2026-01-23T15:54:43.817526Z"
+}

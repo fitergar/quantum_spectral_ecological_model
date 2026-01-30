@@ -1,0 +1,26 @@
+{
+  "hidden": [
+    400,
+    500,
+    450
+  ],
+  "input": "drio",
+  "model": "MLPDriver",
+  "poly_degree": 5,
+  "train_args": {
+    "cuda": false,
+    "dataset": "test1",
+    "driver_h1": 400,
+    "driver_h2": 500,
+    "driver_h3": 450,
+    "driver_poly": 5,
+    "epochs": 50000,
+    "log_every": 100,
+    "lr0_inv": 100.0,
+    "metrics_csv": "train_driver_metrics_test.csv",
+    "save_args": false,
+    "seed": 0,
+    "step_size": 1.0,
+    "warm_start": false
+  }
+}
