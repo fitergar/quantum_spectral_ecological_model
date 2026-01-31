@@ -1,189 +1,127 @@
 # Quantum Spectral Ecological Model — Chimalapas / Ptychohyla euthysanota
 
-This repository contains the computational implementation accompanying the article:
+This repository accompanies the article:
 
 **“AI based quantum motivated spectral modeling of _Ptychohyla euthysanota_ in the Chimalapas montane forest”**
 
-The code implements a qualitative species distribution modeling framework designed for **extremely sparse and spatially clustered field observations**, where standard statistical approaches are unreliable. The method combines:
+and contains the full computational pipeline used to produce the results reported therein.
 
-- probabilistic modeling via Gibbs measures,
-- spectral analysis of discrete Schrödinger operators on graphs, and
-- neural networks to extrapolate inferred habitat suitability across a landscape.
+The purpose of this work is to infer **qualitative spatial structure** of a species distribution in a remote, data-scarce environment, where field observations are extremely sparse and spatially clustered. Rather than attempting precise abundance estimation, the framework focuses on recovering **ecologically credible spatial patterns**, such as strong stream affinity and fine-scale variation along river corridors.
 
-The objective is **not quantitative abundance estimation**, but rather the recovery of **ecologically credible spatial structure** (e.g. stream affinity) under severe data limitations.
+The approach integrates three main ingredients:
 
----
-
-## 1. Conceptual overview and mapping to code
-
-This section explains the full pipeline and explicitly maps each methodological component in the paper to the corresponding code.
+1. a probabilistic formulation of species occupancy using Gibbs measures,
+2. spectral analysis of discrete Schrödinger operators defined on spatial graphs, and
+3. neural networks to extrapolate inferred habitat suitability across the landscape.
 
 ---
 
-### 1.1 External preprocessing (GIS) and required inputs
+## 1. Methodological overview and relation to the code
 
-Before running any Python scripts, the study area is discretized into a **2D grid** (UTM) and exported as a base CSV. In the original study, this was done using **QGIS**, but any GIS software is acceptable as long as it produces the same required fields.
-
-#### Base grid CSV (required)
-A CSV representing the grid must include:
-- `X`, `Y` — UTM coordinates of the cell center
-- `Z` — elevation above mean sea level (from an elevation raster)
-- `esrio` — indicator for river cells (1 if cell intersects the river, else 0)
-- `NUMPOINTS` — raw field detections per cell (0 for most cells)
-
-#### Satellite RGB CSVs (required for the greyscale model)
-The pipeline can incorporate satellite texture by attaching rasterized RGB samples per cell. In the original study, RGB values were obtained by rasterizing satellite imagery onto the grid using **QuickMapServices** (QGIS) and exporting per-cell RGB values to CSV files (e.g., `B2.csv`, `G2.csv`, `R2.csv`).
-
-> **Tools and data sources used in the study**
-> - GIS preprocessing: QGIS (free/open source)
-> - Hydrology/topography inputs: INEGI open datasets
-> - Satellite imagery sampling: QuickMapServices (QGIS plugin), then exported to CSV
->
-> Users of this repository are free to generate equivalent inputs using other software, as long as the resulting CSVs contain the expected columns.
+This section summarizes the modeling workflow at a conceptual level and explains how each methodological step is reflected in the structure of the code. Detailed file-level descriptions and execution instructions are provided in Section 2.
 
 ---
 
-### 1.2 `preprocess_grid_to_dataset.py`: enrich grid with river geometry and RGB covariates
+### 1.1 Spatial discretization and GIS-based preprocessing
 
-Once the base grid CSV and the RGB CSV files exist, the first Python step is:
+The study region is represented as a **two-dimensional spatial grid** in UTM coordinates using the reference system EPSG:32615 (WGS84 / UTM zone 15N). Each grid cell corresponds to a square of fixed side length (10 m in the original study), chosen to match the spatial uncertainty of handheld GPS measurements collected during field surveys.
 
--src/preprocess_grid_to_dataset.py
+All spatial preprocessing is carried out **externally**, prior to running the Python modeling pipeline. In the original study, this preprocessing was performed using **QGIS**, but the modeling code itself is agnostic to the specific GIS software used. Any workflow capable of producing equivalent tabular outputs can be substituted.
 
+The GIS preprocessing stage produces the following spatial data products:
 
-This script takes the base grid (cells + `esrio` + `Z`) and produces the **model-ready dataset** by computing additional covariates:
+- a regular grid (retícula) covering the study region,
+- centroid coordinates for each grid cell,
+- a vector representation of the river network,
+- elevation data referenced to mean sea level,
+- rasterized satellite imagery aligned to the grid.
 
-1. **Distance to the river (`drio`)**
-   - Identifies river cells using `esrio`.
-   - Computes, for each cell, the distance to the nearest river cell.
-   - Stores the result as `drio` (meters).
+Hydrological and topographic layers are obtained from **INEGI** open datasets. Elevation rasters are reprojected to the project coordinate system and sampled at grid centroids to obtain per-cell elevation values. All vector and raster layers are maintained in the same UTM projection to ensure spatial consistency throughout the pipeline.
 
-2. **Relative height to the river (relative elevation)**
-   - Uses `Z` plus the river geometry (via `esrio`) to compute a relative-elevation-type covariate:
-     height of the cell relative to a local river reference.
-   - This is the “relative elevation with respect to the river” term described in the paper and is used by the greyscale-modulated model.
-
-3. **Attach satellite RGB values**
-   - Reads the RGB CSVs (e.g. `B2/G2/R2`) produced by rasterizing satellite imagery onto the grid.
-   - Merges those values into the main dataset so each cell includes satellite-derived covariates.
-
-**Output:**
-- A single CSV (placed in `data/` or as specified by args) containing:
-  - `X, Y, id, NUMPOINTS`
-  - `Z` (elevation)
-  - `drio` (distance to river)
-  - relative height to the river (relative elevation covariate)
-  - RGB covariates needed to derive greyscale features
-
-This output is the **entry point** for the rest of the pipeline.
+Most spatial products generated during this stage (GeoPackages, shapefiles, rasters) are stored in the repository under the `data/Gpx/` directory. These files are included to facilitate reproducibility, but users are free to regenerate them using other software or alternative open datasets, provided the resulting grid-level attributes are equivalent.
 
 ---
 
-### 1.3 `prepare.py`: define training region and smooth sparse observations (construct ψ)
+### 1.2 River geometry, distance, and relative elevation
 
-Field observations are extremely sparse and concentrated near the river network. To stabilize inference, we restrict inference to a **training region** close to the river and apply spatial smoothing.
+The river network plays a central role in the modeling framework. From the grid and the river geometry, two key covariates are derived for each cell:
 
-This is handled by:
+- **distance to the river**, defined as the distance from the cell centroid to the nearest river cell,
+- **relative height with respect to the river**, capturing elevation differences between a cell and nearby river segments.
 
--src/prepare.py
+These quantities encode large-scale ecological constraints—particularly stream affinity—without imposing them directly in the probabilistic model.
 
-
-This script performs:
-
-1. **Training region selection**
-   - Defines a spatial subset of the grid used for training (typically a near-river region).
-   - This selection is currently **hard-coded** in the script and must be modified directly when changing study regions or buffers.
-
-2. **Gaussian smoothing of field detections**
-   - Raw counts (`NUMPOINTS`) are smoothed using a Gaussian kernel on the grid.
-   - Produces a strictly positive occupancy proxy ψ used for inverse spectral inference.
-   - This step does not introduce new ecological information; it regularizes the sparse signal implied by the data.
-
-3. **Construction of the canonical working table**
-   - Produces the run-specific dataset used by all training and prediction scripts.
-
-**Output:**
-- `outputs/<run_name>/prepared.csv`
+The computation of river distance and relative elevation is handled in the first stage of the Python pipeline by the script `preprocess_grid_to_dataset.py`, which takes as input a base grid CSV containing coordinates, elevation above sea level, and a river indicator, and augments it with these derived covariates.
 
 ---
 
-### 1.4 Dispersal modeling: graph Laplacian on the grid
+### 1.3 Satellite imagery and texture information
 
-Spatial interactions are modeled via nearest-neighbor coupling on the grid:
+To capture fine-scale environmental variation along the river corridor, the framework incorporates information derived from satellite imagery.
 
-- each cell is a vertex,
-- edges connect cells sharing a side (4-neighborhood),
-- dispersal is encoded via the combinatorial Laplacian \(L\).
+Satellite maps are accessed via **QuickMapServices** within QGIS and rasterized onto the same grid used for spatial discretization. Raster bands corresponding to red, green, and blue channels are extracted, pixelated to match the grid resolution, and sampled at grid centroids. The resulting RGB values are exported to CSV files and later merged into the main dataset.
 
-**Code:**
-- `src/linalg.py` — Laplacian construction and spectral solvers
-- `src/featurize.py` — feature/tensor construction aligned with grid order
+Within the Python pipeline, these RGB values are attached to each grid cell by `preprocess_grid_to_dataset.py` and subsequently combined into greyscale descriptors that serve as proxies for local texture and surface properties.
+
+The modeling framework does not depend on a specific satellite provider; QuickMapServices is used solely as a convenient interface for accessing open map tiles. Any equivalent raster source can be substituted, provided the imagery is aligned to the grid and exported in tabular form.
 
 ---
 
-### 1.5 Inverse spectral inference of the habitat suitability potential V
+### 1.4 Field observations, training region, and smoothing
 
-Given a strictly positive smoothed occupancy proxy ψ on the training region, we infer a site-dependent potential:
+Field observations consist of georeferenced detections of _Ptychohyla euthysanota_ collected during a limited number of expeditions. Due to the remoteness of the region and the logistical constraints of access, detections are extremely sparse and concentrated almost exclusively near the river network.
 
+After discretization, most grid cells contain zero observations. To stabilize inference, the analysis is restricted to a **training region** near the river, and raw detection counts are spatially regularized. This stage is implemented in the script `prepare.py`.
+
+Specifically, this step:
+
+- defines the spatial extent of the training region (currently specified internally in the code),
+- applies **Gaussian smoothing** to raw counts to produce a strictly positive proxy for relative occupancy, denoted ψ,
+- constructs the canonical working dataset used by all subsequent training and prediction steps.
+
+The smoothing procedure introduces no additional ecological assumptions; it regularizes the sparse signal implied by the spatial support of the data and enables stable spectral inference.
+
+---
+
+### 1.5 Probabilistic formulation and inverse spectral inference
+
+Species occupancy on the grid is modeled as a collection of locally interacting random variables. Under standard locality assumptions, the joint distribution admits a Gibbs representation whose energy consists of:
+
+- a **dispersal term**, penalizing sharp spatial variations and encoded by the graph Laplacian of the grid,
+- an **environmental potential**, representing habitat suitability at each cell.
+
+This energy defines a discrete Schrödinger operator \(H = L + \mathrm{diag}(V)\), where \(L\) is the combinatorial Laplacian. A central consequence of this formulation is that the most probable spatial configuration of the species corresponds to the **ground state** of \(H\).
+
+Given a strictly positive smoothed occupancy proxy ψ on the training region, the environmental potential is reconstructed pointwise via the inverse spectral relation
 \[
 V_\ell = -\frac{(L\psi)_\ell}{\psi_\ell}.
 \]
+Under mild connectivity assumptions, this reconstruction is unique. The inferred potential provides a quantitative description of habitat suitability consistent with the observed spatial structure and serves as the training target for the neural networks.
 
-This defines a discrete Schrödinger operator:
-
-\[
-H = L + \mathrm{diag}(V),
-\]
-
-whose ground state matches ψ (up to normalization). Under mild connectivity assumptions this mapping from ψ to V is unique.
-
-**Implementation notes:**
-- The inferred potential is computed numerically as part of the training pipeline.
-- Linear algebra utilities and stable operations live in `src/linalg.py`.
-
-The inferred potential is the **training target** for the neural networks.
+Linear-algebra routines required for Laplacian construction and spectral computations are implemented in `linalg.py`, with supporting feature construction in `featurize.py`.
 
 ---
 
-### 1.6 Learning the potential with neural networks
+### 1.6 Learning and extrapolation of habitat suitability
 
-Two neural models are trained:
+The inferred potential is defined only on the training region. To extrapolate habitat suitability across the full landscape, it is learned as a function of environmental covariates using neural networks.
 
-#### (a) Distance-to-river driver model
-Learns a baseline potential depending only on `drio`.
+Two models are trained:
 
-**Script:**
--src/train_driver.py
+- a **distance-to-river driver**, which captures the dominant large-scale dependence on river proximity and is trained by `train_driver.py`,
+- a **greyscale- and relative-elevation-modulated model**, which refines the driver using satellite-derived texture and elevation information near the river corridor and is trained by `train_grey.py`.
 
-
-#### (b) Greyscale/relative-height modulated model
-Refines the driver using satellite texture (greyscale derived from RGB) and relative elevation with respect to the river, activated primarily near the river through a distance-based gate.
-
-**Script:**
--src/train_grey.py
-
-
-The driver is trained first and then frozen while training the modulated model.
+The driver model is trained first and then frozen while fitting the modulated model.
 
 ---
 
-### 1.7 Prediction via local spectral ground states and neighborhood averaging
+### 1.7 Local spectral prediction and spatial averaging
 
-Predictions are generated locally along the river corridor:
+Predicted species distributions are generated locally along the river network. Overlapping neighborhoods are constructed around river-adjacent cells; within each neighborhood, the learned potential is evaluated, the local Schrödinger operator is formed, and its ground state is computed. Local probabilities \(|\psi|^2\) are then averaged across overlapping neighborhoods to produce a stable global prediction.
 
-1. Construct overlapping square neighborhoods centered on near-river cells.
-2. For each neighborhood:
-   - evaluate the learned potential,
-   - build \(H = L + \mathrm{diag}(V)\),
-   - compute its ground state,
-   - interpret probability as \(|\psi|^2\).
-3. Average overlapping neighborhood probabilities to mitigate boundary/degree artefacts and scaling ambiguity.
-
-**Scripts:**
--src/predict_driver_local.py
--src/predict_gray_local.py
-
-
-**Outputs:**
-- Final averaged prediction tables in `outputs/<run_name>/`.
+These steps are implemented in `predict_driver_local.py` and `predict_gray_local.py`. Final prediction tables are written to the corresponding run directory under `outputs/`.
 
 ---
+
+Section 2 describes the repository structure and provides a detailed, reproducible execution protocol for running each script.
+
