@@ -24,46 +24,66 @@ This section summarizes the modeling workflow at a conceptual level and explains
 
 ### 1.1 Spatial discretization and GIS-based preprocessing
 
-The study region is represented as a **two-dimensional spatial grid** in UTM coordinates using the reference system EPSG:32615 (WGS84 / UTM zone 15N). Each grid cell corresponds to a square of fixed side length (10 m in the original study), chosen to match the spatial uncertainty of handheld GPS measurements collected during field surveys.
+The study region is represented as a **two-dimensional spatial grid** in UTM coordinates using the reference system **EPSG:32615 (WGS84 / UTM zone 15N)**. Each grid cell corresponds to a square of fixed side length (10 m in the original study), chosen to match the positional uncertainty of handheld GPS measurements collected during field surveys.
 
 All spatial preprocessing is carried out **externally**, prior to running the Python modeling pipeline. In the original study, this preprocessing was performed using **QGIS**, but the modeling code itself is agnostic to the specific GIS software used. Any workflow capable of producing equivalent tabular outputs can be substituted.
 
 The GIS preprocessing stage produces the following spatial data products:
 
-- a regular grid (retícula) covering the study region,
+- a regular grid covering the study region,
 - centroid coordinates for each grid cell,
 - a vector representation of the river network,
 - elevation data referenced to mean sea level,
 - rasterized satellite imagery aligned to the grid.
 
-Hydrological and topographic layers are obtained from **INEGI** open datasets. Elevation rasters are reprojected to the project coordinate system and sampled at grid centroids to obtain per-cell elevation values. All vector and raster layers are maintained in the same UTM projection to ensure spatial consistency throughout the pipeline.
+Hydrological and topographic layers are obtained from **INEGI (Instituto Nacional de Estadística y Geografía)** open datasets. In particular, vector hydrography and topography correspond to the INEGI E15C55 La Gloria dataset (Serie III, 1:50 000), available at:
 
-Most spatial products generated during this stage (GeoPackages, shapefiles, rasters) are stored in the repository under the `data/Gpx/` directory. These files are included to facilitate reproducibility, but users are free to regenerate them using other software or alternative open datasets, provided the resulting grid-level attributes are equivalent.
+https://www.inegi.org.mx/app/biblioteca/ficha.html?upc=889463497363
+
+Elevation data are derived from the INEGI **Continental Relief** products, available at:
+
+https://www.inegi.org.mx/temas/relieve/continental/#descargas
+
+Elevation rasters are reprojected to the project coordinate system (EPSG:32615) and sampled at grid centroids to obtain per-cell elevation values. Due to their large file size, the original elevation raster files are **not included in this repository**, but they are publicly available from INEGI and can be readily regenerated following the same procedure.
+
+Satellite imagery is accessed through **QuickMapServices** within QGIS and rasterized onto the same grid used for spatial discretization. The resulting raster layers are aligned to the project coordinate system to ensure spatial consistency.
+
+Most spatial products generated during this stage (GeoPackages, shapefiles, and selected raster-derived products) are stored in the repository under the `data/Gpx/` directory. These files are included to facilitate reproducibility, but users are free to regenerate them using other GIS software or alternative open datasets, provided the resulting grid-level attributes are equivalent.
+
 
 ---
 
 ### 1.2 River geometry, distance, and relative elevation
 
-The river network plays a central role in the modeling framework. From the grid and the river geometry, two key covariates are derived for each cell:
+The river network plays a central role in the modeling framework, as _Ptychohyla euthysanota_ is strongly associated with stream environments. From the spatial grid and the river geometry, two key covariates are derived for each cell:
 
-- **distance to the river**, defined as the distance from the cell centroid to the nearest river cell,
-- **relative height with respect to the river**, capturing elevation differences between a cell and nearby river segments.
+- **distance to the river**, defined as the distance from the grid cell centroid to the nearest river segment,
+- **relative height with respect to the river**, capturing elevation differences between a cell and nearby river locations.
 
-These quantities encode large-scale ecological constraints—particularly stream affinity—without imposing them directly in the probabilistic model.
+These quantities encode large-scale ecological constraints—particularly stream affinity and topographic position relative to the river—without imposing them directly in the probabilistic model.
 
-The computation of river distance and relative elevation is handled in the first stage of the Python pipeline by the script `preprocess_grid_to_dataset.py`, which takes as input a base grid CSV containing coordinates, elevation above sea level, and a river indicator, and augments it with these derived covariates.
+In the original study, the river network was digitized in QGIS as a dedicated vector layer aligned to the project grid. The study region was defined by drawing a polygon enclosing the relevant section of the river corridor, and the grid was clipped to this region. River geometry was then converted into a set of reference cells or points aligned with the grid resolution, allowing distances from grid centroids to the river to be computed consistently.
+
+Elevation values sampled at grid centroids were used to derive a relative elevation measure by comparing each cell’s elevation to that of nearby river cells. This relative height is intended to capture local topographic structure along the river corridor, rather than absolute elevation above sea level.
+
+It is important to emphasize that this GIS-based procedure is **not unique**. Distance to river and relative elevation can be computed using a variety of equivalent methods and tools, provided that the resulting quantities are defined consistently on the grid. The modeling framework does not depend on a specific implementation, only on the availability of these covariates at the grid-cell level.
+
+Within the Python pipeline, the computation and attachment of distance-to-river and relative-elevation covariates are handled by the script `preprocess_grid_to_dataset.py`. This script takes as input a base grid CSV containing coordinates, elevation above sea level, and a river indicator, and augments it with these derived quantities in a form suitable for downstream modeling.
 
 ---
 
 ### 1.3 Satellite imagery and texture information
 
-To capture fine-scale environmental variation along the river corridor, the framework incorporates information derived from satellite imagery.
+To capture fine-scale environmental variation along the river corridor, the framework incorporates information derived from satellite imagery. These data serve as proxies for local surface texture and habitat heterogeneity that are not captured by distance to river or elevation alone.
 
-Satellite maps are accessed via **QuickMapServices** within QGIS and rasterized onto the same grid used for spatial discretization. Raster bands corresponding to red, green, and blue channels are extracted, pixelated to match the grid resolution, and sampled at grid centroids. The resulting RGB values are exported to CSV files and later merged into the main dataset.
+In the original study, satellite maps were accessed through **QuickMapServices** within QGIS and rasterized onto the same spatial grid used for discretization. Raster layers corresponding to the red, green, and blue channels were generated, reprojected to the project coordinate system (EPSG:32615), and pixelated so that each grid cell corresponded to a single raster value per channel.
 
-Within the Python pipeline, these RGB values are attached to each grid cell by `preprocess_grid_to_dataset.py` and subsequently combined into greyscale descriptors that serve as proxies for local texture and surface properties.
+RGB values were then sampled at grid centroids and exported to tabular form (CSV files). These CSVs were merged with the main grid dataset, ensuring that each cell carried a consistent set of satellite-derived covariates aligned with its spatial location.
 
-The modeling framework does not depend on a specific satellite provider; QuickMapServices is used solely as a convenient interface for accessing open map tiles. Any equivalent raster source can be substituted, provided the imagery is aligned to the grid and exported in tabular form.
+Within the Python pipeline, these RGB values are attached to each grid cell by `preprocess_grid_to_dataset.py` and subsequently combined into greyscale descriptors. The greyscale quantities are used as inputs to the neural network that modulates habitat suitability locally along the river corridor.
+
+As with the river-related covariates, this satellite-processing workflow is **not unique**. Any raster source capable of providing spatially aligned texture information can be used, and alternative GIS or remote-sensing tools may be substituted. QuickMapServices is used solely as a convenient interface for accessing open map tiles; the modeling framework itself does not depend on a specific satellite provider, only on the availability of grid-aligned raster values exported in tabular form.
+
 
 ---
 
@@ -83,22 +103,29 @@ The smoothing procedure introduces no additional ecological assumptions; it regu
 
 ---
 
-### 1.5 Probabilistic formulation and inverse spectral inference
+### 1.4 Field observations, training region, and smoothing
 
-Species occupancy on the grid is modeled as a collection of locally interacting random variables. Under standard locality assumptions, the joint distribution admits a Gibbs representation whose energy consists of:
+Field observations consist of georeferenced detections of _Ptychohyla euthysanota_ collected during a limited number of expeditions. Due to the remoteness of the study area and the logistical constraints of access, detections are extremely sparse and concentrated almost exclusively near the river network. After discretization, the majority of grid cells contain zero observations.
 
-- a **dispersal term**, penalizing sharp spatial variations and encoded by the graph Laplacian of the grid,
-- an **environmental potential**, representing habitat suitability at each cell.
+To stabilize inference and ensure that the inverse spectral problem is well posed, the analysis is restricted to a **training region** located along the surveyed river corridor. This region corresponds to the area where field observations were collected and where the spatial support of the data is sufficiently dense to allow reliable reconstruction of the habitat-suitability potential.
 
-This energy defines a discrete Schrödinger operator \(H = L + \mathrm{diag}(V)\), where \(L\) is the combinatorial Laplacian. A central consequence of this formulation is that the most probable spatial configuration of the species corresponds to the **ground state** of \(H\).
+In practice, the training region is defined as the union of several contiguous rectangular subregions aligned with the river geometry, expressed directly in UTM coordinates (EPSG:32615). These subregions form a narrow, elongated domain that follows the river course and reflects the spatial extent of the sampling effort. In addition, only cells within a fixed maximum distance from the river are retained, ensuring that training is confined to the near-river environment where detections are meaningful.
 
-Given a strictly positive smoothed occupancy proxy ψ on the training region, the environmental potential is reconstructed pointwise via the inverse spectral relation
-\[
-V_\ell = -\frac{(L\psi)_\ell}{\psi_\ell}.
-\]
-Under mild connectivity assumptions, this reconstruction is unique. The inferred potential provides a quantitative description of habitat suitability consistent with the observed spatial structure and serves as the training target for the neural networks.
+Conceptually, the training region can be described as:
+- a union of axis-aligned rectangles in the \((X, Y)\) plane that trace the river corridor,
+- intersected with a distance-to-river constraint \(d_{\mathrm{rio}} \le d_{\max}\).
 
-Linear-algebra routines required for Laplacian construction and spectral computations are implemented in `linalg.py`, with supporting feature construction in `featurize.py`.
+The exact numerical bounds of these rectangles are encoded directly in the preparation stage of the pipeline and can be modified to accommodate different study regions or river geometries. This explicit geometric definition avoids reliance on opaque spatial joins and makes the training domain fully reproducible.
+
+Once the training region is selected, raw detection counts (`NUMPOINTS`) are spatially regularized. This step is implemented in the script `prepare.py` and consists of applying a **Gaussian smoothing** procedure on the grid. The result is a strictly positive, continuous proxy for relative occupancy, denoted \(\psi\), defined on the training region.
+
+The smoothing step serves two purposes:
+1. it regularizes the extremely sparse observation signal implied by the field data,
+2. it ensures strict positivity of \(\psi\), which is required for the inverse spectral reconstruction of the habitat-suitability potential.
+
+Importantly, this procedure introduces no additional ecological assumptions beyond spatial continuity at the scale of the grid. It is a numerical regularization step that enables stable spectral inference while preserving the large-scale spatial structure implied by the data.
+
+The output of this stage is a canonical, run-specific dataset containing the smoothed occupancy proxy and all associated covariates, which is subsequently used for potential inference, neural network training, and prediction.
 
 ---
 
