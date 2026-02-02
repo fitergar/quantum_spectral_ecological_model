@@ -1,12 +1,12 @@
 {
   "args": {
-    "conv_print_every": 25,
+    "conv_print_every": 1,
     "conv_warn_relres": 1e-06,
     "cuda": false,
     "dataset": "test1",
     "iters": 50000,
     "neigh_file": "VecindadesLinf.pkl",
-    "out_csv": "pred_grey_localavg.csv",
+    "out_csv": "pred_driver_localavg.csv",
     "pow": 10,
     "save_args": true,
     "shift": 5000.0,
