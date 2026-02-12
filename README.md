@@ -1,6 +1,6 @@
 # Quantum Spectral Ecological Model — Chimalapas / Ptychohyla euthysanota
 
-This repository accompanies the article: **"AI based quantum motivated spectral modeling of _Ptychohyla euthysanota_ in the Chimalapas montane forest"** and contains the full computational pipeline used to produce the results reported therein.
+This repository accompanies the article: **"Spectral modeling of the stream frog Ptychohyla euthysanota in the Chimalapas montane forest"** and contains the full computational pipeline used to produce the results reported therein.
 
 The purpose of this work is to infer **qualitative spatial structure** of a species distribution in a remote, data-scarce environment, where field observations are extremely sparse and spatially clustered. Rather than attempting precise abundance estimation, the framework focuses on recovering **ecologically credible spatial patterns**, such as strong stream affinity and fine-scale variation along river corridors.
 
